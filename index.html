@@ -25,7 +25,7 @@
             --text: #F8FAFC;
             --text-muted: #94A3B8;
             --danger: #EF4444;
-            --panel-height: 270px; /* Reduced since action buttons moved up, freeing space for the editor */
+            --panel-height: 320px; /* Balance between editor space and panel usability */
         }
 
         * {
@@ -461,6 +461,19 @@
         // Initial state
         btnKb.style.background = '#334155';
         btnKb.textContent = '⌨ OFF';
+        
+        // iOS fix: force Safari to re-read inputmode when tapping the editor
+        editorContent.addEventListener('touchstart', function() {
+            if (isKbEnabled) {
+                // Briefly toggle contenteditable to force iOS to re-evaluate inputmode
+                editorContent.setAttribute('contenteditable', 'false');
+                setTimeout(function() {
+                    editorContent.setAttribute('contenteditable', 'true');
+                    editorContent.setAttribute('inputmode', 'text');
+                    editorContent.focus();
+                }, 10);
+            }
+        }, { passive: true });
 
         const canvasOverlay = document.getElementById('canvas-overlay');
         const canvas = document.getElementById('annotation-canvas');
