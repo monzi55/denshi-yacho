@@ -374,6 +374,14 @@
             
             lastRange = range.cloneRange();
             updateCurrentMemo();
+            
+            // Auto-scroll to keep cursor visible
+            setTimeout(() => {
+                const dummy = document.createElement("span");
+                range.insertNode(dummy);
+                dummy.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                dummy.remove();
+            }, 20);
         }
 
         function renderNumberGroups() {
