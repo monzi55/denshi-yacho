@@ -372,20 +372,29 @@
             lastRange = range.cloneRange();
             updateCurrentMemo();
             
-            // Auto-scroll: ensure the caret stays visible in #editor-main
-            const editorMain = document.getElementById('editor-main');
-            const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                const caretRange = sel.getRangeAt(0);
-                const caretRect = caretRange.getBoundingClientRect();
-                const mainRect = editorMain.getBoundingClientRect();
-                
-                if (caretRect.bottom > mainRect.bottom) {
-                    editorMain.scrollTop += (caretRect.bottom - mainRect.bottom) + 20;
-                } else if (caretRect.top < mainRect.top) {
-                    editorMain.scrollTop -= (mainRect.top - caretRect.top) + 20;
+            // Auto-scroll: wait for DOM paint, then use a real element to measure position
+            requestAnimationFrame(() => {
+                const editorMain = document.getElementById('editor-main');
+                const sel = window.getSelection();
+                if (sel.rangeCount > 0) {
+                    const r = sel.getRangeAt(0);
+                    // Insert a real DOM element at caret (element rects are reliable on iOS, unlike Range rects)
+                    const marker = document.createElement('span');
+                    marker.textContent = '\u200B'; // zero-width space
+                    r.insertNode(marker);
+                    
+                    const markerRect = marker.getBoundingClientRect();
+                    const mainRect = editorMain.getBoundingClientRect();
+                    
+                    if (markerRect.bottom > mainRect.bottom - 5) {
+                        editorMain.scrollTop += (markerRect.bottom - mainRect.bottom) + 30;
+                    } else if (markerRect.top < mainRect.top + 5) {
+                        editorMain.scrollTop -= (mainRect.top - markerRect.top) + 30;
+                    }
+                    
+                    marker.remove();
                 }
-            }
+            });
         }
 
         function renderNumberGroups() {
