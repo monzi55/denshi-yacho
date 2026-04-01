@@ -442,44 +442,25 @@
         let isKbEnabled = false;
         const btnKb = document.getElementById('btn-kb-toggle');
         
-        function updateKbButton() {
+        btnKb.onclick = function() {
+            isKbEnabled = !isKbEnabled;
+            
             if (isKbEnabled) {
-                btnKb.style.background = 'var(--primary)';
+                btnKb.style.background = '#FF7F00'; // Hex color - CSS var() fails on iOS inline styles
                 btnKb.textContent = '⌨ ON';
                 editorContent.setAttribute('inputmode', 'text');
+                // Do NOT call focus() here - it resets the cursor on Android.
+                // User taps the editor area to get the keyboard.
             } else {
                 btnKb.style.background = '#334155';
                 btnKb.textContent = '⌨ OFF';
                 editorContent.setAttribute('inputmode', 'none');
+                editorContent.blur(); // Hide keyboard
             }
-        }
-        
-        btnKb.addEventListener('click', () => {
-            isKbEnabled = !isKbEnabled;
-            updateKbButton();
-            
-            if (isKbEnabled) {
-                // Restore the cursor position FIRST before focusing
-                const selection = window.getSelection();
-                if (lastRange) {
-                    selection.removeAllRanges();
-                    selection.addRange(lastRange);
-                } else {
-                    // Fallback to end if no previous selection exists
-                    const range = document.createRange();
-                    range.selectNodeContents(editorContent);
-                    range.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                }
-                
-                // Focus MUST be called synchronously inside the click handler to trigger iOS Keyboard
-                editorContent.focus();
-            } else {
-                editorContent.blur();
-            }
-        });
-        updateKbButton(); // Start OFF by default
+        };
+        // Initial state
+        btnKb.style.background = '#334155';
+        btnKb.textContent = '⌨ OFF';
 
         const canvasOverlay = document.getElementById('canvas-overlay');
         const canvas = document.getElementById('annotation-canvas');
