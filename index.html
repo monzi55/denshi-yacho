@@ -40,7 +40,7 @@
             background-color: var(--bg-dark);
             color: var(--text);
             overflow: hidden;
-            height: 100vh;
+            height: 100dvh;
             width: 100vw;
         }
 
@@ -111,9 +111,10 @@
         .current-title { font-size: 1rem; font-weight: 600; flex: 1; text-align: center; }
         .export-btn { font-size: 0.9rem; font-weight: 700; color: var(--primary); background: rgba(255, 127, 0, 0.1); border-radius: 8px; }
 
-        #editor-main { flex: 1; overflow-y: auto; padding: 1rem; padding-bottom: var(--panel-height); }
+        #editor-main { flex: 1; overflow-y: auto; padding: 1rem; }
         .editable-content { 
-            min-height: 50vh; 
+            min-height: 100px; 
+            height: 100%;
             font-size: 1.1rem; 
             line-height: 1.6; 
             outline: none; 
@@ -121,14 +122,13 @@
             padding: 1rem; 
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.03); /* Slight visibility for the field */
-            margin-bottom: 2rem;
         }
         .photo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-top: 1rem; }
         .photo-attachment { position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; background: #000; }
         .photo-attachment img { width: 100%; height: 100%; object-fit: cover; }
 
         #control-panel {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: var(--panel-height);
+            flex-shrink: 0; height: var(--panel-height); max-height: 45vh;
             background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             border-top: 1px solid var(--border); display: flex; flex-direction: column; z-index: 30;
             padding-bottom: env(safe-area-inset-bottom);
@@ -438,19 +438,35 @@
         document.getElementById('btn-space').onclick = () => insertText(' ');
         document.getElementById('btn-backspace').onclick = () => { document.execCommand('delete', false, null); updateCurrentMemo(); };
         
-        // Keyboard Toggle Logic
-        document.getElementById('btn-kb-toggle').addEventListener('pointerdown', (e) => {
-            e.preventDefault(); // Prevent normal click blur
-            if (editorContent.inputMode === 'none') {
-                editorContent.inputMode = 'text';
-                editorContent.focus(); // Synchronous focus request for iOS
+        // Keyboard Toggle Logic (ON/OFF State)
+        let isKbEnabled = false;
+        const btnKb = document.getElementById('btn-kb-toggle');
+        
+        function updateKbState() {
+            if (isKbEnabled) {
+                btnKb.classList.add('primary'); // Highlight orange
+                editorContent.inputMode = 'text'; // Enable keyboard when tapped
             } else {
-                editorContent.inputMode = 'none';
-                editorContent.blur(); 
-                // Delay slight so iOS hides keyboard properly before returning focus to editor
-                setTimeout(() => editorContent.focus(), 100); 
+                btnKb.classList.remove('primary'); // Dark mode
+                editorContent.inputMode = 'none'; // Lock keyboard out
+            }
+        }
+        
+        // Prevent layout blur when clicking
+        btnKb.addEventListener('mousedown', (e) => e.preventDefault()); 
+        btnKb.addEventListener('touchstart', (e) => e.preventDefault(), {passive:false}); 
+        
+        btnKb.addEventListener('click', () => {
+            isKbEnabled = !isKbEnabled;
+            updateKbState();
+            
+            if (isKbEnabled) {
+                editorContent.focus(); // Trusted click event ensures iOS trigger
+            } else {
+                editorContent.blur(); // Hide keyboard instantly when OFF
             }
         });
+        updateKbState(); // Start OFF by default
 
         const canvasOverlay = document.getElementById('canvas-overlay');
         const canvas = document.getElementById('annotation-canvas');
