@@ -375,26 +375,14 @@
             lastRange = range.cloneRange();
             updateCurrentMemo();
             
-            // Instant, bulletproof auto-scroll to keep cursor visible
+            // Instant, native auto-scroll to keep cursor visible
             setTimeout(() => {
-                const editorMain = document.getElementById('editor-main');
-                
-                // Insert a temporary zero-width marker to reliably calculate exact cursor position
                 const dummy = document.createElement("span");
-                dummy.textContent = "\u200B";
+                dummy.innerHTML = "&nbsp;"; // Needs mass to reliably trigger scrolling
                 range.insertNode(dummy);
                 
-                const rect = dummy.getBoundingClientRect();
-                const containerRect = editorMain.getBoundingClientRect();
-                
-                // If cursor is pushed below the visible area, instantly scroll down
-                if (rect.bottom > containerRect.bottom) {
-                    editorMain.scrollTop += (rect.bottom - containerRect.bottom) + 30; // 30px padding below
-                }
-                // If cursor is somehow above, scroll up
-                else if (rect.top < containerRect.top) {
-                    editorMain.scrollTop -= (containerRect.top - rect.top) + 30;
-                }
+                // Native smooth tracking centers the user's cursor
+                dummy.scrollIntoView({ behavior: 'auto', block: 'center' });
                 
                 dummy.remove();
             }, 0);
@@ -484,19 +472,14 @@
         // Initial state
         btnKb.style.background = '#334155';
         btnKb.textContent = '⌨ OFF';
-        
-        // iOS fix: force Safari to re-read inputmode when tapping the editor
-        editorContent.addEventListener('touchstart', function() {
-            if (isKbEnabled) {
-                // Briefly toggle contenteditable to force iOS to re-evaluate inputmode
-                editorContent.setAttribute('contenteditable', 'false');
-                setTimeout(function() {
-                    editorContent.setAttribute('contenteditable', 'true');
-                    editorContent.setAttribute('inputmode', 'text');
-                    editorContent.focus();
-                }, 10);
+
+        // Listen for standard selection changes (user taps somewhere) to ensure we respect native placement
+        document.addEventListener('selectionchange', () => {
+            if (document.activeElement === editorContent) {
+                const sel = window.getSelection();
+                if (sel.rangeCount > 0) lastRange = sel.getRangeAt(0).cloneRange();
             }
-        }, { passive: true });
+        });
 
         const canvasOverlay = document.getElementById('canvas-overlay');
         const canvas = document.getElementById('annotation-canvas');
