@@ -25,7 +25,7 @@
             --text: #F8FAFC;
             --text-muted: #94A3B8;
             --danger: #EF4444;
-            --panel-height: 420px; /* Large area for one-handed operation */
+            --panel-height: 270px; /* Reduced since action buttons moved up, freeing space for the editor */
         }
 
         * {
@@ -439,16 +439,18 @@
         document.getElementById('btn-backspace').onclick = () => { document.execCommand('delete', false, null); updateCurrentMemo(); };
         
         // Keyboard Toggle Logic
-        document.getElementById('btn-kb-toggle').onclick = () => {
+        document.getElementById('btn-kb-toggle').addEventListener('pointerdown', (e) => {
+            e.preventDefault(); // Prevent normal click blur
             if (editorContent.inputMode === 'none') {
                 editorContent.inputMode = 'text';
-                editorContent.focus();
+                editorContent.focus(); // Synchronous focus request for iOS
             } else {
                 editorContent.inputMode = 'none';
-                editorContent.blur();
-                editorContent.focus(); // Refresh focus with none
+                editorContent.blur(); 
+                // Delay slight so iOS hides keyboard properly before returning focus to editor
+                setTimeout(() => editorContent.focus(), 100); 
             }
-        };
+        });
 
         const canvasOverlay = document.getElementById('canvas-overlay');
         const canvas = document.getElementById('annotation-canvas');
