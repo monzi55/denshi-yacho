@@ -375,13 +375,29 @@
             lastRange = range.cloneRange();
             updateCurrentMemo();
             
-            // Auto-scroll to keep cursor visible
+            // Instant, bulletproof auto-scroll to keep cursor visible
             setTimeout(() => {
+                const editorMain = document.getElementById('editor-main');
+                
+                // Insert a temporary zero-width marker to reliably calculate exact cursor position
                 const dummy = document.createElement("span");
+                dummy.textContent = "\u200B";
                 range.insertNode(dummy);
-                dummy.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                
+                const rect = dummy.getBoundingClientRect();
+                const containerRect = editorMain.getBoundingClientRect();
+                
+                // If cursor is pushed below the visible area, instantly scroll down
+                if (rect.bottom > containerRect.bottom) {
+                    editorMain.scrollTop += (rect.bottom - containerRect.bottom) + 30; // 30px padding below
+                }
+                // If cursor is somehow above, scroll up
+                else if (rect.top < containerRect.top) {
+                    editorMain.scrollTop -= (containerRect.top - rect.top) + 30;
+                }
+                
                 dummy.remove();
-            }, 20);
+            }, 0);
         }
 
         function renderNumberGroups() {
