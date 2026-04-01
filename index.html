@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Smart Surveyor - 電子野帳</title>
+    <meta name="theme-color" content="#1A2B48">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SmartSurvey">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <!-- jsPDF and html2canvas from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary: #FF7F00; /* Field Safety Orange */
+            --accent: #2DA44E; /* Green for success/save */
+            --bg-dark: #0F172A; /* Deep Navy Background */
+            --surface: rgba(30, 41, 59, 0.8); /* Semi-transparent navy */
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #F8FAFC;
+            --text-muted: #94A3B8;
+            --danger: #EF4444;
+            --panel-height: 420px; /* Large area for one-handed operation */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #app { height: 100%; width: 100%; }
+
+        .screen {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            padding-bottom: env(safe-area-inset-bottom);
+            transition: transform 0.3s ease;
+        }
+
+        .hidden { display: none !important; }
+
+        header {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem;
+            padding-top: calc(1rem + env(safe-area-inset-top));
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10;
+        }
+
+        h1 { font-size: 1.25rem; font-weight: 700; }
+
+        .memo-container { flex: 1; overflow-y: auto; padding: 1rem; }
+
+        .memo-card {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 1.25rem; margin-bottom: 1rem;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .memo-info h3 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+        .memo-info span { font-size: 0.8rem; color: var(--text-muted); }
+
+        .card-actions { display: flex; gap: 0.5rem; }
+
+        .btn-rename {
+            background: rgba(59, 130, 246, 0.1); color: #3B82F6;
+            border: none; width: 40px; height: 40px; border-radius: 12px; font-size: 1.1rem;
+        }
+
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1); color: var(--danger);
+            border: none; width: 40px; height: 40px; border-radius: 12px; font-size: 1.1rem;
+        }
+
+        .fab {
+            position: fixed;
+            bottom: calc(2rem + env(safe-area-inset-bottom));
+            right: 1.5rem;
+            background: var(--primary); color: white;
+            padding: 1rem 1.5rem; border: none; border-radius: 30px;
+            display: flex; align-items: center; gap: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(255, 127, 0, 0.3);
+            z-index: 20; font-size: 1rem; font-weight: 700;
+        }
+
+        .editor-header { height: 70px; }
+        .icon-btn { background: transparent; border: none; color: var(--text); font-size: 1.5rem; width: 44px; height: 44px; }
+        .current-title { font-size: 1rem; font-weight: 600; flex: 1; text-align: center; }
+        .export-btn { font-size: 0.9rem; font-weight: 700; color: var(--primary); background: rgba(255, 127, 0, 0.1); border-radius: 8px; }
+
+        #editor-main { flex: 1; overflow-y: auto; padding: 1rem; padding-bottom: var(--panel-height); }
+        .editable-content { 
+            min-height: 50vh; 
+            font-size: 1.1rem; 
+            line-height: 1.6; 
+            outline: none; 
+            white-space: pre-wrap; 
+            padding: 1rem; 
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03); /* Slight visibility for the field */
+            margin-bottom: 2rem;
+        }
+        .photo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-top: 1rem; }
+        .photo-attachment { position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; background: #000; }
+        .photo-attachment img { width: 100%; height: 100%; object-fit: cover; }
+
+        #control-panel {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: var(--panel-height);
+            background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border); display: flex; flex-direction: column; z-index: 30;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .panel-tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .tab { flex: 1; padding: 0.75rem; background: transparent; border: none; color: var(--text-muted); font-size: 0.9rem; font-weight: 600; }
+        .tab.aktif { color: var(--primary); border-bottom: 2px solid var(--primary); }
+        .panel-content { flex: 1; overflow-y: auto; padding: 0.75rem; }
+        .sub-panel { height: 100%; display: flex; flex-direction: column; }
+        .chip-row { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.75rem; scrollbar-width: none; }
+        .chip-row::-webkit-scrollbar { display: none; }
+        .chip { padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 20px; white-space: nowrap; font-size: 0.9rem; }
+        .chip.active { background: var(--primary); border-color: var(--primary); }
+        .number-grid, .preset-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+        .number-grid button, .preset-btn, .dim-btn { height: 48px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 1rem; font-weight: 500; }
+        .number-grid button:active, .preset-btn:active, .dim-btn:active { background: var(--primary); opacity: 0.8; }
+        .panel-actions { display: flex; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); }
+        .action-btn { flex: 1; height: 54px; border-radius: 12px; border: none; font-weight: 700; font-size: 1.1rem; color: white; background: #334155; }
+        .action-btn.primary { background: var(--primary); }
+        .action-btn.danger { background: var(--danger); }
+
+        .camera-controls { display: flex; justify-content: center; align-items: center; height: 100%; }
+        .camera-btn { width: 120px; height: 120px; border-radius: 60px; background: var(--primary); border: 8px solid rgba(255, 127, 0, 0.2); color: white; font-weight: 700; }
+
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: flex; flex-direction: column; }
+        .canvas-container { flex: 1; display: flex; flex-direction: column; padding: 1rem; padding-top: env(safe-area-inset-top); }
+        #annotation-canvas { background: #222; width: 100%; flex: 1; border-radius: 12px; touch-action: none; }
+        .canvas-controls { display: flex; gap: 1rem; padding: 1rem 0; }
+        .canvas-controls button { flex: 1; height: 50px; border-radius: 12px; border: none; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="list-screen" class="screen">
+            <header><h1>電子野帳 一覧</h1></header>
+            <div id="memo-list" class="memo-container"></div>
+            <button id="btn-new-memo" class="fab"><span class="icon">+</span><span class="label">新規作成</span></button>
+        </div>
+        <div id="editor-screen" class="screen hidden">
+            <header class="editor-header">
+                <button id="btn-back" class="icon-btn">←</button>
+                <div id="memo-title" class="current-title"></div>
+                <button id="btn-export" class="icon-btn export-btn">PDF</button>
+            </header>
+            
+            <div class="panel-actions" style="border-top: none; border-bottom: 1px solid var(--border); background: var(--surface);">
+                <button id="btn-kb-toggle" class="action-btn">⌨</button>
+                <button id="btn-space" class="action-btn">空白</button>
+                <button id="btn-newline" class="action-btn primary">改行</button>
+                <button id="btn-backspace" class="action-btn danger">←削除</button>
+            </div>
+
+            <main id="editor-main">
+                <div id="memo-content" class="editable-content" contenteditable="true" inputmode="none" placeholder="タップして編集..."></div>
+                <div id="photo-attachments" class="photo-grid"></div>
+            </main>
+            <div id="control-panel">
+                <div class="panel-tabs">
+                    <button class="tab aktif" data-panel="numbers">数字</button>
+                    <button class="tab" data-panel="presets">定型文</button>
+                    <button class="tab" data-panel="dimensions">寸法</button>
+                    <button class="tab" data-panel="camera">カメラ</button>
+                </div>
+                <div class="panel-content">
+                    <div id="panel-numbers" class="sub-panel">
+                        <div id="number-groups" class="chip-row"></div>
+                        <div id="number-selectors" class="number-grid"></div>
+                    </div>
+                    <div id="panel-presets" class="sub-panel hidden"><div class="preset-grid"></div></div>
+                    <div id="panel-dimensions" class="sub-panel hidden">
+                        <div class="preset-grid">
+                            <button class="dim-btn">400×225</button>
+                            <button class="dim-btn">φ345</button>
+                            <button class="dim-btn">φ215</button>
+                            <button class="dim-btn">φ30</button>
+                            <button class="dim-btn">□500</button>
+                            <button class="dim-btn">□40</button>
+                            <button class="dim-btn">500</button>
+                            <button class="dim-btn">600</button>
+                            <button class="dim-btn">320</button>
+                            <button class="dim-btn">300</button>
+                            <button class="dim-btn">290</button>
+                            <button class="dim-btn">280</button>
+                        </div>
+                    </div>
+                    <div id="panel-camera" class="sub-panel hidden">
+                        <div class="camera-controls">
+                            <button id="btn-capture" class="camera-btn">写真を撮る</button>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+        <div id="canvas-overlay" class="overlay hidden">
+            <div class="canvas-container">
+                <canvas id="annotation-canvas"></canvas>
+                <div class="canvas-controls">
+                    <button id="btn-canvas-cancel">戻る</button>
+                    <button id="btn-canvas-save" class="primary">貼り付け</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const { jsPDF } = window.jspdf || {};
+        let memos = JSON.parse(localStorage.getItem('memos') || '[]');
+        let currentMemo = null;
+        let selectedNumGroup = null;
+        const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const w = weekdays[date.getDay()];
+            return `${y}年${m}月${d}日 ${w}`;
+        }
+
+        function generateMemoTitle() {
+            const today = new Date();
+            const baseTitle = formatDate(today);
+            const existing = memos.filter(m => m.title.startsWith(baseTitle));
+            if (existing.length === 0) return baseTitle;
+            let maxBranch = 1;
+            existing.forEach(m => {
+                const match = m.title.match(/-(\d+)$/);
+                if (match) {
+                    const branch = parseInt(match[1]);
+                    if (branch > maxBranch) maxBranch = branch;
+                }
+            });
+            return `${baseTitle}-${maxBranch + 1}`;
+        }
+
+        const listScreen = document.getElementById('list-screen');
+        const editorScreen = document.getElementById('editor-screen');
+        const memoListContainer = document.getElementById('memo-list');
+        const editorContent = document.getElementById('memo-content');
+        const memoTitleEl = document.getElementById('memo-title');
+        const photoGrid = document.getElementById('photo-attachments');
+
+        function showList() {
+            renderList();
+            listScreen.classList.remove('hidden');
+            editorScreen.classList.add('hidden');
+            currentMemo = null;
+        }
+
+        function showEditor(memo) {
+            currentMemo = memo;
+            memoTitleEl.textContent = memo.title;
+            editorContent.innerHTML = memo.content || '';
+            renderPhotos(memo.photos || []);
+            listScreen.classList.add('hidden');
+            editorScreen.classList.remove('hidden');
+            editorContent.inputMode = 'none'; // Ensure keyboard starts hidden
+        }
+
+        function renderList() {
+            memoListContainer.innerHTML = '';
+            memos.sort((a,b) => b.id - a.id).forEach(memo => {
+                const card = document.createElement('div');
+                card.className = 'memo-card';
+                card.innerHTML = `
+                    <div class="memo-info">
+                        <h3>${memo.title}</h3>
+                        <span>最終更新: ${new Date(memo.id).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-rename" data-id="${memo.id}">✎</button>
+                        <button class="btn-delete" data-id="${memo.id}">×</button>
+                    </div>
+                `;
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.card-actions')) return;
+                    showEditor(memo);
+                });
+                memoListContainer.appendChild(card);
+            });
+            
+            document.querySelectorAll('.btn-rename').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const memo = memos.find(m => m.id === parseInt(btn.dataset.id));
+                    const newName = prompt('新しい名称を入力してください', memo.title);
+                    if (newName) { memo.title = newName; saveState(); renderList(); }
+                };
+            });
+            document.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm('このメモを削除しますか？')) {
+                        memos = memos.filter(m => m.id !== parseInt(btn.dataset.id));
+                        saveState(); renderList();
+                    }
+                };
+            });
+        }
+
+        function saveState() { localStorage.setItem('memos', JSON.stringify(memos)); }
+        function updateCurrentMemo() { if (!currentMemo) return; currentMemo.content = editorContent.innerHTML; saveState(); }
+
+        function insertText(text) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+            const range = selection.getRangeAt(0);
+            if (!editorContent.contains(range.commonAncestorContainer)) {
+                editorContent.innerHTML += text;
+            } else {
+                range.deleteContents();
+                const textNode = document.createTextNode(text);
+                range.insertNode(textNode);
+                range.setStartAfter(textNode);
+                range.setEndAfter(textNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            updateCurrentMemo();
+            editorContent.focus(); 
+        }
+
+        function renderNumberGroups() {
+            const container = document.getElementById('number-groups');
+            container.innerHTML = '';
+            for (let i = 0; i <= 990; i += 10) {
+                const btn = document.createElement('div');
+                btn.className = 'chip' + (selectedNumGroup === i ? ' active' : '');
+                btn.textContent = `${i}～`;
+                btn.onclick = () => { selectedNumGroup = i; renderNumberGroups(); renderNumberGrid(i); };
+                container.appendChild(btn);
+            }
+        }
+
+        function renderNumberGrid(start) {
+            const grid = document.getElementById('number-selectors');
+            grid.innerHTML = '';
+            for (let i = start; i < start + 10; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                btn.onclick = () => insertText(i.toString() + ' ');
+                grid.appendChild(btn);
+            }
+            ['～', '・'].forEach(sym => {
+                const btn = document.createElement('button');
+                btn.textContent = sym;
+                btn.onclick = () => insertText(sym + ' ');
+                grid.appendChild(btn);
+            });
+        }
+
+        document.getElementById('btn-new-memo').onclick = () => {
+            const newMemo = { id: Date.now(), title: generateMemoTitle(), content: '', photos: [] };
+            memos.push(newMemo); saveState(); showEditor(newMemo);
+        };
+        document.getElementById('btn-back').onclick = showList;
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.onclick = () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('aktif'));
+                tab.classList.add('aktif');
+                document.querySelectorAll('.sub-panel').forEach(p => p.classList.add('hidden'));
+                document.getElementById(`panel-${tab.dataset.panel}`).classList.remove('hidden');
+            };
+        });
+
+        const presets = ['境界点', 'レベル', 'ＢＭ', '引照点鋲','量水器BOX', '雨水ﾏｽ', '排水ﾏｽ', '汚水ﾏｽ','北側', '東側', '南側', '西側','CB塀', '法面', '肩', 'スソ','引き込み', 'ﾒｰﾀｰ', 'ｶﾞｽ鋲', 'ｶﾞｽ杭','プラ杭', 'CON杭', 'ﾌﾟﾚｰﾄ', '鋲','ｶｰブﾐﾗｰ', 'ｶﾞｰﾄﾞﾚｰﾙ', 'ｶﾞｰﾄﾞﾊﾟｲﾌﾟ', 'ﾃﾞﾘﾈｰﾀｰ','上水ﾊﾝﾄﾞﾎｰﾙ', '上水排水ﾊﾝﾄﾞﾎｰﾙ', '仕切弁', '下水ﾏﾝﾎｰル','汚水ﾊﾝﾄﾞﾎｰﾙ', 'ﾌｪﾝｽH=', '目隠しﾌｪﾝｽH=', '木製ﾌｪﾝｽH=','建物ﾗｲﾝ', '電柱', '支線','土留', '擁壁', '笠木', '浄化槽'];
+        const presetGrid = document.querySelector('#panel-presets .preset-grid');
+        presets.forEach(p => {
+            const btn = document.createElement('button');
+            btn.className = 'preset-btn'; btn.textContent = p;
+            btn.onclick = () => insertText(p + ' ');
+            presetGrid.appendChild(btn);
+        });
+
+        document.querySelectorAll('.dim-btn').forEach(btn => {
+            btn.onclick = () => insertText(btn.textContent + ' ');
+        });
+
+        document.getElementById('btn-newline').onclick = () => insertText('\n');
+        document.getElementById('btn-space').onclick = () => insertText(' ');
+        document.getElementById('btn-backspace').onclick = () => { document.execCommand('delete', false, null); updateCurrentMemo(); };
+        
+        // Keyboard Toggle Logic
+        document.getElementById('btn-kb-toggle').onclick = () => {
+            if (editorContent.inputMode === 'none') {
+                editorContent.inputMode = 'text';
+                editorContent.focus();
+            } else {
+                editorContent.inputMode = 'none';
+                editorContent.blur();
+                editorContent.focus(); // Refresh focus with none
+            }
+        };
+
+        const canvasOverlay = document.getElementById('canvas-overlay');
+        const canvas = document.getElementById('annotation-canvas');
+        const ctx = canvas.getContext('2d');
+        let drawing = false;
+
+        document.getElementById('btn-capture').onclick = () => {
+            const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+            input.onchange = (e) => {
+                const reader = new FileReader();
+                reader.onload = (re) => startAnnotation(re.target.result);
+                reader.readAsDataURL(e.target.files[0]);
+            };
+            input.click();
+        };
+
+        function startAnnotation(imgData) {
+            canvasOverlay.classList.remove('hidden');
+            const img = new Image();
+            img.onload = () => {
+                const maxWidth = window.innerWidth - 40; const scale = maxWidth / img.width;
+                canvas.width = img.width * scale; canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+            };
+            img.src = imgData;
+        }
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.touches) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+        canvas.addEventListener('mousedown', (e) => { drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); });
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); });
+        canvas.addEventListener('mousemove', (e) => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+        canvas.addEventListener('touchmove', (e) => { if (!drawing) return; e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+        window.addEventListener('mouseup', () => drawing = false);
+        window.addEventListener('touchend', () => drawing = false);
+
+        document.getElementById('btn-canvas-cancel').onclick = () => canvasOverlay.classList.add('hidden');
+        document.getElementById('btn-canvas-save').onclick = () => {
+            const imgData = canvas.toDataURL('image/jpeg', 0.7);
+            currentMemo.photos = currentMemo.photos || []; currentMemo.photos.push(imgData);
+            saveState(); renderPhotos(currentMemo.photos); canvasOverlay.classList.add('hidden');
+        };
+
+        function renderPhotos(photos) {
+            photoGrid.innerHTML = '';
+            photos.forEach((p, idx) => {
+                const wrap = document.createElement('div'); wrap.className = 'photo-attachment'; wrap.innerHTML = `<img src="${p}">`;
+                wrap.onclick = () => { if (confirm('この写真を削除しますか？')) { currentMemo.photos.splice(idx, 1); saveState(); renderPhotos(currentMemo.photos); } };
+                photoGrid.appendChild(wrap);
+            });
+        }
+
+        document.getElementById('btn-export').onclick = async () => {
+            if (!window.jspdf || !window.html2canvas) { alert('ライブラリの読み込みを待っています...'); return; }
+            const captureArea = document.createElement('div');
+            captureArea.style = "width:210mm;padding:20mm;background:white;color:black;position:fixed;top:-10000px;";
+            captureArea.innerHTML = `
+                <h1 style="border-bottom:2px solid #333;padding-bottom:10px;font-size:24px;">測量野帳 (Field Note)</h1>
+                <p style="margin-top:10px;"><strong>件名:</strong> ${currentMemo.title}</p>
+                <div style="margin-top:20px;border:1px solid #ddd;padding:15px;min-height:200px;font-size:14px;white-space:pre-wrap;">${editorContent.innerText}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;">
+                    ${(currentMemo.photos || []).map(p => `<div style="border:1px solid #eee;"><img src="${p}" style="width:100%;"></div>`).join('')}
+                </div>
+            `;
+            document.body.appendChild(captureArea);
+            try {
+                const canvas = await html2canvas(captureArea, { scale: 2 });
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, (canvas.height * pdfWidth) / canvas.width);
+                pdf.save(`${currentMemo.title}.pdf`);
+            } catch (err) { alert('PDF作成エラー'); } finally { document.body.removeChild(captureArea); }
+        };
+
+        renderList(); renderNumberGroups(); renderNumberGrid(0);
+        editorContent.addEventListener('input', updateCurrentMemo);
+    </script>
+</body>
+</html>
