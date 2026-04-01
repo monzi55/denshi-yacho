@@ -342,7 +342,8 @@
         });
 
         function insertText(text) {
-            editorContent.focus();
+            // preventScroll stops Android Chrome from jumping the viewport on focus
+            editorContent.focus({ preventScroll: true });
             const selection = window.getSelection();
             
             if (lastRange) {
@@ -378,16 +379,16 @@
                 const sel = window.getSelection();
                 if (sel.rangeCount > 0) {
                     const r = sel.getRangeAt(0);
-                    // Insert a real DOM element at caret (element rects are reliable on iOS, unlike Range rects)
                     const marker = document.createElement('span');
-                    marker.textContent = '\u200B'; // zero-width space
+                    marker.textContent = '\u200B';
                     r.insertNode(marker);
                     
                     const markerRect = marker.getBoundingClientRect();
                     const mainRect = editorMain.getBoundingClientRect();
                     
-                    if (markerRect.bottom > mainRect.bottom - 5) {
-                        editorMain.scrollTop += (markerRect.bottom - mainRect.bottom) + 30;
+                    // Trigger scroll when caret is within 44px of the bottom (before it disappears)
+                    if (markerRect.bottom > mainRect.bottom - 44) {
+                        editorMain.scrollTop += (markerRect.bottom - mainRect.bottom) + 60;
                     } else if (markerRect.top < mainRect.top + 5) {
                         editorMain.scrollTop -= (mainRect.top - markerRect.top) + 30;
                     }
