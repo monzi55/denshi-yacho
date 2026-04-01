@@ -334,23 +334,47 @@
         function saveState() { localStorage.setItem('memos', JSON.stringify(memos)); }
         function updateCurrentMemo() { if (!currentMemo) return; currentMemo.content = editorContent.innerHTML; saveState(); }
 
+        let lastRange = null;
+        document.addEventListener('selectionchange', () => {
+            const sel = window.getSelection();
+            if (sel.rangeCount > 0) {
+                const r = sel.getRangeAt(0);
+                if (editorContent.contains(r.commonAncestorContainer)) {
+                    lastRange = r.cloneRange();
+                }
+            }
+        });
+
         function insertText(text) {
+            editorContent.focus();
             const selection = window.getSelection();
-            if (!selection.rangeCount) return;
-            const range = selection.getRangeAt(0);
-            if (!editorContent.contains(range.commonAncestorContainer)) {
-                editorContent.innerHTML += text;
+            
+            if (lastRange) {
+                selection.removeAllRanges();
+                selection.addRange(lastRange);
+            }
+            
+            let range;
+            if (selection.rangeCount > 0 && editorContent.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+                range = selection.getRangeAt(0);
             } else {
-                range.deleteContents();
-                const textNode = document.createTextNode(text);
-                range.insertNode(textNode);
-                range.setStartAfter(textNode);
-                range.setEndAfter(textNode);
+                range = document.createRange();
+                range.selectNodeContents(editorContent);
+                range.collapse(false); // Move to the very end
                 selection.removeAllRanges();
                 selection.addRange(range);
             }
+            
+            range.deleteContents();
+            const textNode = document.createTextNode(text);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            lastRange = range.cloneRange();
             updateCurrentMemo();
-            editorContent.focus(); 
         }
 
         function renderNumberGroups() {
