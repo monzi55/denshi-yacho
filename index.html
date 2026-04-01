@@ -442,31 +442,40 @@
         let isKbEnabled = false;
         const btnKb = document.getElementById('btn-kb-toggle');
         
-        function updateKbState() {
+        // Hidden input trick for iOS keyboard activation
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'text';
+        hiddenInput.style.cssText = 'position:fixed;top:-100px;left:0;opacity:0;width:1px;height:1px;';
+        document.body.appendChild(hiddenInput);
+        
+        function updateKbButton() {
             if (isKbEnabled) {
-                btnKb.classList.add('primary'); // Highlight orange
-                editorContent.inputMode = 'text'; // Enable keyboard when tapped
+                btnKb.style.background = 'var(--primary)';
+                btnKb.textContent = '⌨ ON';
+                editorContent.setAttribute('inputmode', 'text');
             } else {
-                btnKb.classList.remove('primary'); // Dark mode
-                editorContent.inputMode = 'none'; // Lock keyboard out
+                btnKb.style.background = '#334155';
+                btnKb.textContent = '⌨';
+                editorContent.setAttribute('inputmode', 'none');
             }
         }
         
-        // Prevent layout blur when clicking
-        btnKb.addEventListener('mousedown', (e) => e.preventDefault()); 
-        btnKb.addEventListener('touchstart', (e) => e.preventDefault(), {passive:false}); 
-        
         btnKb.addEventListener('click', () => {
             isKbEnabled = !isKbEnabled;
-            updateKbState();
+            updateKbButton();
             
             if (isKbEnabled) {
-                editorContent.focus(); // Trusted click event ensures iOS trigger
+                // Use hidden input to force iOS/Android to show the keyboard
+                hiddenInput.focus();
+                setTimeout(() => {
+                    editorContent.setAttribute('inputmode', 'text');
+                    editorContent.focus();
+                }, 50);
             } else {
-                editorContent.blur(); // Hide keyboard instantly when OFF
+                editorContent.blur();
             }
         });
-        updateKbState(); // Start OFF by default
+        updateKbButton(); // Start OFF by default
 
         const canvasOverlay = document.getElementById('canvas-overlay');
         const canvas = document.getElementById('annotation-canvas');
