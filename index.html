@@ -406,6 +406,76 @@
             });
         }
 
+        function insertNewline() {
+            editorContent.focus({ preventScroll: true });
+            const selection = window.getSelection();
+
+            if (lastRange) {
+                selection.removeAllRanges();
+                selection.addRange(lastRange);
+            }
+
+            let range;
+            if (selection.rangeCount > 0 && editorContent.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+                range = selection.getRangeAt(0);
+            } else {
+                range = document.createRange();
+                range.selectNodeContents(editorContent);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+
+            range.deleteContents();
+
+            // <br> 要素を挿入（contenteditable では \n テキストと違い確実に行を生成する）
+            const br = document.createElement('br');
+            range.insertNode(br);
+
+            // 末尾判定: br の後ろに実質的なコンテンツがなければセンチネル <br> を追加
+            // （contenteditable では末尾の単独 <br> は「行終端」として扱われ新しい行を描画しないため）
+            let next = br.nextSibling;
+            const needsSentinel = !next ||
+                (next.nodeType === Node.TEXT_NODE && next.textContent === '') ||
+                (next.nodeType === Node.ELEMENT_NODE && next.tagName === 'BR' && !next.nextSibling);
+            if (needsSentinel) {
+                const sentinel = document.createElement('br');
+                br.parentNode.insertBefore(sentinel, br.nextSibling);
+            }
+
+            // カーソルを <br> の直後に配置
+            range.setStartAfter(br);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            lastRange = range.cloneRange();
+            updateCurrentMemo();
+
+            // Auto-scroll
+            requestAnimationFrame(() => {
+                const editorMain = document.getElementById('editor-main');
+                const sel2 = window.getSelection();
+                if (sel2.rangeCount > 0) {
+                    const r = sel2.getRangeAt(0);
+                    const marker = document.createElement('span');
+                    marker.textContent = '\u200B';
+                    r.insertNode(marker);
+
+                    const markerRect = marker.getBoundingClientRect();
+                    const mainRect = editorMain.getBoundingClientRect();
+
+                    if (markerRect.bottom > mainRect.bottom - 44) {
+                        editorMain.scrollTop += (markerRect.bottom - mainRect.bottom) + 60;
+                    } else if (markerRect.top < mainRect.top + 5) {
+                        editorMain.scrollTop -= (mainRect.top - markerRect.top) + 30;
+                    }
+
+                    marker.remove();
+                }
+            });
+        }
+
         function renderNumberGroups() {
             const container = document.getElementById('number-groups');
             container.innerHTML = '';
@@ -463,7 +533,7 @@
             btn.onclick = () => insertText(btn.textContent + ' ');
         });
 
-        document.getElementById('btn-newline').onclick = () => insertText('\n');
+        document.getElementById('btn-newline').onclick = () => insertNewline();
         document.getElementById('btn-space').onclick = () => insertText(' ');
         document.getElementById('btn-backspace').onclick = () => { document.execCommand('delete', false, null); updateCurrentMemo(); };
         
