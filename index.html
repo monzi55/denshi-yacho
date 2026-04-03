@@ -362,15 +362,23 @@
                 selection.addRange(range);
             }
             
-            range.deleteContents();
-            const textNode = document.createTextNode(text);
-            range.insertNode(textNode);
-            range.setStartAfter(textNode);
-            range.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(range);
+            // Android等でのテキスト末尾改行時のカーソル移動問題を解決するため、
+            // 直接のノード挿入からブラウザ標準のテキスト挿入コマンドに変更
+            const success = document.execCommand('insertText', false, text);
+            if (!success) {
+                // コマンドがサポートされていない場合のフォールバック（従来の処理）
+                range.deleteContents();
+                const textNode = document.createTextNode(text);
+                range.insertNode(textNode);
+                range.setStartAfter(textNode);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
             
-            lastRange = range.cloneRange();
+            if (selection.rangeCount > 0) {
+                lastRange = selection.getRangeAt(0).cloneRange();
+            }
             updateCurrentMemo();
             
             // Auto-scroll: wait for DOM paint, then use a real element to measure position
