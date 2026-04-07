@@ -977,22 +977,67 @@
         const voiceStatus = document.getElementById('voice-status');
         let recognition = null;
         let isRecording = false;
-        let lastProcessedIndex = -1; // Track processed results to avoid duplicates
-        let recentVoiceResults = []; // Store {text, time} of recently processed results
 
-        let isNewSession = false;
+        // Android detection: Android Chrome has a known bug with continuous mode
+        // that causes duplicate/replayed results. Use single-shot mode instead.
+        const isAndroid = /android/i.test(navigator.userAgent);
+
+        // Deduplication: sliding window of recent results
+        let recentVoiceResults = [];
+        // Track which result indices have been processed in this session
+        let processedResultIds = new Set();
+
+        function applyVoiceDictionary(text) {
+            // 「から」→「～」
+            let out = text.replace(/から/g, '～');
+            // 境界標（よくある誤変換対応）
+            out = out.replace(/きょうかいひょう|境界表|境界票|協会票|協会表/g, '境界標');
+            return out;
+        }
+
+        function processVoiceResult(rawText) {
+            const now = Date.now();
+
+            // Maintain sliding window (last 5 seconds)
+            recentVoiceResults = recentVoiceResults.filter(r => now - r.time < 5000);
+
+            // Check for duplicate
+            for (const r of recentVoiceResults) {
+                if (r.text === rawText) {
+                    return; // Skip duplicate
+                }
+            }
+
+            recentVoiceResults.push({ text: rawText, time: now });
+
+            // Apply dictionary
+            let processedText = applyVoiceDictionary(rawText);
+
+            // Process text and "改行" sequentially
+            const parts = processedText.split(/改行|かいぎょう/);
+            for (let j = 0; j < parts.length; j++) {
+                if (parts[j].trim()) {
+                    insertText(parts[j].trim() + (j < parts.length - 1 ? '' : ' '));
+                }
+                if (j < parts.length - 1) {
+                    insertNewline();
+                }
+            }
+        }
 
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             recognition.lang = 'ja-JP';
-            recognition.continuous = true;
             recognition.interimResults = true;
+
+            // KEY FIX: Android must use single-shot mode to avoid duplicate results
+            // iOS works fine with continuous mode
+            recognition.continuous = !isAndroid;
 
             recognition.onstart = () => {
                 isRecording = true;
-                lastProcessedIndex = -1; // Reset tracker on start
-                isNewSession = true;
+                processedResultIds = new Set();
                 voiceBtn.classList.add('recording');
                 voiceBtn.innerHTML = '音声入力<br>停止';
                 voiceStatus.textContent = '聞き取っています...';
@@ -1003,56 +1048,16 @@
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const result = event.results[i];
+
                     if (result.isFinal) {
-                        // Only process if this is a new final result index
-                        if (i > lastProcessedIndex) {
-                            let rawText = result[0].transcript.trim();
-                            const now = Date.now();
-
-                            // Maintain a sliding window of recent results (last 10 seconds)
-                            recentVoiceResults = recentVoiceResults.filter(r => now - r.time < 10000);
-
-                            let isDuplicate = false;
-                            for (let r of recentVoiceResults) {
-                                if (r.text === rawText) {
-                                    // Block if exact same text appeared within 3 seconds
-                                    if (now - r.time < 3000) {
-                                        isDuplicate = true;
-                                        break;
-                                    }
-                                    // Block Safari/Android ghost result on new session start
-                                    if (isNewSession && i === 0) {
-                                        isDuplicate = true;
-                                        break;
-                                    }
-                                }
+                        // Use a unique key per result to avoid reprocessing
+                        const resultKey = i + ':' + result[0].transcript;
+                        if (!processedResultIds.has(resultKey)) {
+                            processedResultIds.add(resultKey);
+                            const rawText = result[0].transcript.trim();
+                            if (rawText) {
+                                processVoiceResult(rawText);
                             }
-
-                            if (isDuplicate) {
-                                lastProcessedIndex = i;
-                                continue;
-                            }
-                            
-                            isNewSession = false;
-                            recentVoiceResults.push({text: rawText, time: now});
-
-                            // Commands / Dictionary
-                            let processedText = rawText.replace(/から/g, '～');
-                            // Dictionary: 境界標
-                            processedText = processedText.replace(/きょうかいひょう|境界表|境界票|協会票|協会表/g, '境界標');
-
-                            // Process text and "改行" sequentially
-                            const parts = processedText.split(/改行|かいぎょう/);
-                            for (let j = 0; j < parts.length; j++) {
-                                if (parts[j].trim()) {
-                                    insertText(parts[j].trim() + (j < parts.length - 1 ? '' : ' '));
-                                }
-                                if (j < parts.length - 1) {
-                                    insertNewline();
-                                }
-                            }
-
-                            lastProcessedIndex = i; // Mark as processed
                         }
                     } else {
                         interimTranscript += result[0].transcript;
@@ -1062,21 +1067,38 @@
                 if (interimTranscript) {
                     voiceStatus.textContent = interimTranscript;
                 } else if (event.results.length > 0 && event.results[event.results.length - 1].isFinal) {
-                    voiceStatus.textContent = '聞き取っています...'; // Reset status after final
+                    voiceStatus.textContent = '聞き取っています...';
                 }
             };
 
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
-                if (event.error !== 'no-speech') {
-                    stopVoiceRecognition();
-                    voiceStatus.textContent = 'エラー: ' + event.error;
+                if (event.error === 'no-speech') {
+                    // no-speech is normal - just restart if still recording
+                    return;
                 }
+                if (event.error === 'aborted') {
+                    // aborted happens on Android when restarting quickly - ignore
+                    return;
+                }
+                stopVoiceRecognition();
+                voiceStatus.textContent = 'エラー: ' + event.error;
             };
 
             recognition.onend = () => {
                 if (isRecording) {
-                    recognition.start(); // Auto-restart if we didn't manually stop
+                    // Auto-restart: on Android (single-shot mode) this fires after
+                    // every utterance. Small delay prevents rapid restart errors.
+                    setTimeout(() => {
+                        if (isRecording) {
+                            try {
+                                processedResultIds = new Set(); // Reset for new session
+                                recognition.start();
+                            } catch (e) {
+                                // Already started - ignore
+                            }
+                        }
+                    }, isAndroid ? 300 : 100);
                 } else {
                     stopVoiceRecognition();
                 }
@@ -1088,7 +1110,9 @@
 
         function stopVoiceRecognition() {
             isRecording = false;
-            if (recognition) recognition.stop();
+            if (recognition) {
+                try { recognition.stop(); } catch(e) {}
+            }
             voiceBtn.classList.remove('recording');
             voiceBtn.innerHTML = '音声入力<br>開始';
             voiceStatus.textContent = 'タップして話してください';
