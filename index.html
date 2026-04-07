@@ -667,6 +667,7 @@
         const voiceStatus = document.getElementById('voice-status');
         let recognition = null;
         let isRecording = false;
+        let lastProcessedIndex = -1; // Track processed results to avoid duplicates
 
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -677,6 +678,7 @@
 
             recognition.onstart = () => {
                 isRecording = true;
+                lastProcessedIndex = -1; // Reset tracker on start
                 voiceBtn.classList.add('recording');
                 voiceBtn.innerHTML = '音声入力<br>停止';
                 voiceStatus.textContent = '聞き取っています...';
@@ -684,24 +686,27 @@
 
             recognition.onresult = (event) => {
                 let interimTranscript = '';
-                let finalTranscript = '';
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript;
+                    const result = event.results[i];
+                    if (result.isFinal) {
+                        // Only process if this is a new final result index
+                        if (i > lastProcessedIndex) {
+                            let text = result[0].transcript;
+                            
+                            // Handle commands
+                            if (text.includes('改行') || text.includes('かいぎょう')) {
+                                insertNewline();
+                                text = text.replace(/改行|かいぎょう/g, '');
+                            }
+                            
+                            if (text.trim()) {
+                                insertText(text.trim() + ' ');
+                            }
+                            lastProcessedIndex = i; // Mark as processed
+                        }
                     } else {
-                        interimTranscript += event.results[i][0].transcript;
-                    }
-                }
-
-                if (finalTranscript) {
-                    // Normalize and perform basic commands
-                    if (finalTranscript.includes('改行') || finalTranscript.includes('かいぎょう')) {
-                        insertNewline();
-                        finalTranscript = finalTranscript.replace(/改行|かいぎょう/g, '');
-                    }
-                    if (finalTranscript.trim()) {
-                        insertText(finalTranscript.trim() + ' ');
+                        interimTranscript += result[0].transcript;
                     }
                 }
                 
@@ -712,8 +717,10 @@
 
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
-                stopVoiceRecognition();
-                voiceStatus.textContent = 'エラー: ' + event.error;
+                if (event.error !== 'no-speech') {
+                    stopVoiceRecognition();
+                    voiceStatus.textContent = 'エラー: ' + event.error;
+                }
             };
 
             recognition.onend = () => {
