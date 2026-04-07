@@ -978,8 +978,7 @@
         let recognition = null;
         let isRecording = false;
         let lastProcessedIndex = -1; // Track processed results to avoid duplicates
-        let lastFinalText = '';
-        let lastFinalTime = 0;
+        let recentVoiceResults = []; // Store {text, time} of recently processed results
 
         let isNewSession = false;
 
@@ -1008,26 +1007,39 @@
                         // Only process if this is a new final result index
                         if (i > lastProcessedIndex) {
                             let rawText = result[0].transcript.trim();
-
                             const now = Date.now();
-                            // Safari ghost result fix: immediate repeat of last text at start of a new session
-                            if (isNewSession && i === 0 && rawText === lastFinalText && (now - lastFinalTime) < 10000) {
-                                lastProcessedIndex = i;
-                                continue;
+
+                            // Maintain a sliding window of recent results (last 10 seconds)
+                            recentVoiceResults = recentVoiceResults.filter(r => now - r.time < 10000);
+
+                            let isDuplicate = false;
+                            for (let r of recentVoiceResults) {
+                                if (r.text === rawText) {
+                                    // Block if exact same text appeared within 3 seconds
+                                    if (now - r.time < 3000) {
+                                        isDuplicate = true;
+                                        break;
+                                    }
+                                    // Block Safari/Android ghost result on new session start
+                                    if (isNewSession && i === 0) {
+                                        isDuplicate = true;
+                                        break;
+                                    }
+                                }
                             }
 
-                            // Mobile Browser Bugfix: Prevent duplicate repeats within 2 seconds
-                            if (rawText === lastFinalText && (now - lastFinalTime) < 2000) {
+                            if (isDuplicate) {
                                 lastProcessedIndex = i;
                                 continue;
                             }
                             
                             isNewSession = false;
-                            lastFinalText = rawText;
-                            lastFinalTime = now;
+                            recentVoiceResults.push({text: rawText, time: now});
 
                             // Commands / Dictionary
                             let processedText = rawText.replace(/から/g, '～');
+                            // Dictionary: 境界標
+                            processedText = processedText.replace(/きょうかいひょう|境界表|境界票|協会票|協会表/g, '境界標');
 
                             // Process text and "改行" sequentially
                             const parts = processedText.split(/改行|かいぎょう/);
