@@ -668,6 +668,8 @@
         let recognition = null;
         let isRecording = false;
         let lastProcessedIndex = -1; // Track processed results to avoid duplicates
+        let lastFinalText = '';
+        let lastFinalTime = 0;
 
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -694,15 +696,29 @@
                         if (i > lastProcessedIndex) {
                             let text = result[0].transcript;
                             
-                            // Handle commands
-                            if (text.includes('改行') || text.includes('かいぎょう')) {
-                                insertNewline();
-                                text = text.replace(/改行|かいぎょう/g, '');
+                            // Mobile Browser Bugfix: Prevent duplicate repeats within 2 seconds
+                            const now = Date.now();
+                            if (text === lastFinalText && (now - lastFinalTime) < 2000) {
+                                lastProcessedIndex = i;
+                                continue;
+                            }
+                            lastFinalText = text;
+                            lastFinalTime = now;
+                            
+                            // Commands / Dictionary
+                            text = text.replace(/から/g, '～');
+                            
+                            // Process text and "改行" sequentially
+                            const parts = text.split(/改行|かいぎょう/);
+                            for (let j = 0; j < parts.length; j++) {
+                                if (parts[j].trim()) {
+                                    insertText(parts[j].trim() + (j < parts.length - 1 ? '' : ' '));
+                                }
+                                if (j < parts.length - 1) {
+                                    insertNewline();
+                                }
                             }
                             
-                            if (text.trim()) {
-                                insertText(text.trim() + ' ');
-                            }
                             lastProcessedIndex = i; // Mark as processed
                         }
                     } else {
@@ -712,6 +728,8 @@
                 
                 if (interimTranscript) {
                     voiceStatus.textContent = interimTranscript;
+                } else if (event.results.length > 0 && event.results[event.results.length - 1].isFinal) {
+                    voiceStatus.textContent = '聞き取っています...'; // Reset status after final
                 }
             };
 
