@@ -148,7 +148,15 @@
         .action-btn.danger { background: var(--danger); }
 
         .camera-controls { display: flex; justify-content: center; align-items: center; height: 100%; }
-        .camera-btn { width: 120px; height: 120px; border-radius: 60px; background: var(--primary); border: 8px solid rgba(255, 127, 0, 0.2); color: white; font-weight: 700; }
+        .camera-btn, .voice-btn { width: 120px; height: 120px; border-radius: 60px; background: var(--primary); border: 8px solid rgba(255, 127, 0, 0.2); color: white; font-weight: 700; transition: all 0.3s ease; }
+        .voice-btn.recording { background: var(--danger); border-color: rgba(239, 68, 68, 0.2); animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        #voice-status { text-align: center; margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted); min-height: 1.2em; }
+        .voice-controls { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 1rem; }
 
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: flex; flex-direction: column; }
         .canvas-container { flex: 1; display: flex; flex-direction: column; padding: 1rem; padding-top: env(safe-area-inset-top); }
@@ -188,6 +196,7 @@
                     <button class="tab" data-panel="presets">定型文</button>
                     <button class="tab" data-panel="dimensions">寸法</button>
                     <button class="tab" data-panel="camera">カメラ</button>
+                    <button class="tab" data-panel="voice">音声</button>
                 </div>
                 <div class="panel-content">
                     <div id="panel-numbers" class="sub-panel">
@@ -214,6 +223,12 @@
                     <div id="panel-camera" class="sub-panel hidden">
                         <div class="camera-controls">
                             <button id="btn-capture" class="camera-btn">写真を撮る</button>
+                        </div>
+                    </div>
+                    <div id="panel-voice" class="sub-panel hidden">
+                        <div class="voice-controls">
+                            <button id="btn-voice-start" class="voice-btn">音声入力<br>開始</button>
+                            <p id="voice-status">タップして話してください</p>
                         </div>
                     </div>
                 </div>
@@ -645,6 +660,91 @@
                 pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, (canvas.height * pdfWidth) / canvas.width);
                 pdf.save(`${currentMemo.title}.pdf`);
             } catch (err) { alert('PDF作成エラー'); } finally { document.body.removeChild(captureArea); }
+        };
+
+        // --- Voice Input Logic (Speech Recognition) ---
+        const voiceBtn = document.getElementById('btn-voice-start');
+        const voiceStatus = document.getElementById('voice-status');
+        let recognition = null;
+        let isRecording = false;
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ja-JP';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                voiceBtn.classList.add('recording');
+                voiceBtn.innerHTML = '音声入力<br>停止';
+                voiceStatus.textContent = '聞き取っています...';
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    // Normalize and perform basic commands
+                    if (finalTranscript.includes('改行') || finalTranscript.includes('かいぎょう')) {
+                        insertNewline();
+                        finalTranscript = finalTranscript.replace(/改行|かいぎょう/g, '');
+                    }
+                    if (finalTranscript.trim()) {
+                        insertText(finalTranscript.trim() + ' ');
+                    }
+                }
+                
+                if (interimTranscript) {
+                    voiceStatus.textContent = interimTranscript;
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                stopVoiceRecognition();
+                voiceStatus.textContent = 'エラー: ' + event.error;
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    recognition.start(); // Auto-restart if we didn't manually stop
+                } else {
+                    stopVoiceRecognition();
+                }
+            };
+        } else {
+            voiceBtn.disabled = true;
+            voiceStatus.textContent = 'このブラウザは音声入力に対応していません';
+        }
+
+        function stopVoiceRecognition() {
+            isRecording = false;
+            if (recognition) recognition.stop();
+            voiceBtn.classList.remove('recording');
+            voiceBtn.innerHTML = '音声入力<br>開始';
+            voiceStatus.textContent = 'タップして話してください';
+        }
+
+        voiceBtn.onclick = () => {
+            if (isRecording) {
+                stopVoiceRecognition();
+            } else {
+                if (recognition) {
+                    recognition.start();
+                    // iOS requires a user gesture to start capture
+                }
+            }
         };
 
         renderList(); renderNumberGroups(); renderNumberGrid(0);
