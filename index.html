@@ -514,18 +514,37 @@
                     </div>
                     <div id="panel-dimensions" class="sub-panel hidden">
                         <div class="preset-grid">
-                            <button class="dim-btn">400×225</button>
-                            <button class="dim-btn">φ345</button>
-                            <button class="dim-btn">φ215</button>
+                            <button class="dim-btn">φ13</button>
+                            <button class="dim-btn">φ20</button>
                             <button class="dim-btn">φ30</button>
-                            <button class="dim-btn">□500</button>
+                            <button class="dim-btn">φ215</button>
+                            <button class="dim-btn">φ230</button>
+                            <button class="dim-btn">φ240</button>
+                            <button class="dim-btn">φ300</button>
+                            <button class="dim-btn">φ305</button>
+                            <button class="dim-btn">φ345</button>
+                            <button class="dim-btn">φ375</button>
+                            <button class="dim-btn">φ415</button>
+                            <button class="dim-btn">φ475</button>
+                            <button class="dim-btn">φ690</button>
+                            <button class="dim-btn">φ700</button>
+                            <button class="dim-btn">φ600</button>
+                            <button class="dim-btn">φ630</button>
+                            <button class="dim-btn">380×210</button>
+                            <button class="dim-btn">400×225</button>
+                            <button class="dim-btn">400×250</button>
                             <button class="dim-btn">□40</button>
-                            <button class="dim-btn">500</button>
-                            <button class="dim-btn">600</button>
-                            <button class="dim-btn">320</button>
-                            <button class="dim-btn">300</button>
-                            <button class="dim-btn">290</button>
+                            <button class="dim-btn">□75</button>
+                            <button class="dim-btn">□400</button>
+                            <button class="dim-btn">□500</button>
+                            <button class="dim-btn">100</button>
+                            <button class="dim-btn">120</button>
+                            <button class="dim-btn">150</button>
                             <button class="dim-btn">280</button>
+                            <button class="dim-btn">290</button>
+                            <button class="dim-btn">300</button>
+                            <button class="dim-btn">310</button>
+                            <button class="dim-btn">320</button>
                         </div>
                     </div>
                     <div id="panel-camera" class="sub-panel hidden">
@@ -1111,7 +1130,7 @@
         function stopVoiceRecognition() {
             isRecording = false;
             if (recognition) {
-                try { recognition.stop(); } catch(e) {}
+                try { recognition.stop(); } catch (e) { }
             }
             voiceBtn.classList.remove('recording');
             voiceBtn.innerHTML = '音声入力<br>開始';
